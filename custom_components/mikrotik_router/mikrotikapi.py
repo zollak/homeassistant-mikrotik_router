@@ -117,7 +117,6 @@ class MikrotikAPI:
 
         kwargs = {
             "encoding": self._encoding,
-            "login_methods": self._login_method,
             "port": self._port,
         }
 
