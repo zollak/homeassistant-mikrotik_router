@@ -50,3 +50,11 @@ git fetch upstream
 git checkout master && git merge --ff-only upstream/master && git push origin master
 git checkout homelab && git rebase master && git push --force-with-lease origin homelab
 ```
+
+## 2026-06-30 -- synced with upstream (v2.2.4)
+Merged upstream tomaae/master (3 commits): connection-method selection improvement,
+user-access-policy refactor, Python 3.14 compatibility (#484). Clean auto-merge, no
+conflicts. Our update-popup guard (coordinator.py + update.py) is retained. Our former
+v2.2.1 librouteros connect() hack is now **superseded** by upstream's proper login_method
+handling (plain/token -> librouteros callable) in mikrotikapi.py -- we keep upstream's
+version. Released v2.2.4.
