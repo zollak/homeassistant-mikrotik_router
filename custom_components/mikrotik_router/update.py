@@ -67,8 +67,16 @@ class MikrotikRouterOSUpdate(MikrotikEntity, UpdateEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return true if device is on."""
-        return self._data[self.entity_description.data_attribute]
+        """Return true if an update is genuinely available."""
+        # homelab fix: re-evaluate at read time so a stale 'available' flag or an
+        # unresolved 'unknown' latest version (no internet / right after an upgrade)
+        # cannot surface a phantom update. See tomaae #440/#448/#463/#492.
+        latest = self._data.get("latest-version", "unknown")
+        return (
+            bool(self._data.get(self.entity_description.data_attribute))
+            and latest not in ("unknown", "", None)
+            and latest != self._data.get("installed-version")
+        )
 
     @property
     def installed_version(self) -> str:
@@ -78,7 +86,13 @@ class MikrotikRouterOSUpdate(MikrotikEntity, UpdateEntity):
     @property
     def latest_version(self) -> str:
         """Latest version available for install."""
-        return self._data["latest-version"]
+        # homelab fix: when the latest version can't be determined it defaults to
+        # "unknown"; report the installed version instead so HA's update entity does
+        # not flag a phantom update with an unknown target.
+        latest = self._data["latest-version"]
+        if latest in ("unknown", "", None):
+            return self._data["installed-version"]
+        return latest
 
     async def options_updated(self) -> None:
         """No action needed."""
