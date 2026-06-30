@@ -1589,8 +1589,18 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
         )
 
         if "status" in self.ds["fw-update"]:
+            # homelab fix (false "update available (unknown)" popup): only flag an update
+            # when the latest version is actually known AND differs from the installed one.
+            # Without internet (or right after an update) the check cannot resolve the
+            # latest version -> it defaults to "unknown" while a stale status string may
+            # still read "New version is available", which upstream surfaced as a phantom
+            # update with target version "unknown". See tomaae issues #440/#448/#463/#492.
+            _fw_latest = self.ds["fw-update"].get("latest-version", "unknown")
+            _fw_installed = self.ds["fw-update"].get("installed-version", "unknown")
             self.ds["fw-update"]["available"] = (
                 self.ds["fw-update"]["status"] == "New version is available"
+                and _fw_latest not in ("unknown", "", None)
+                and _fw_latest != _fw_installed
             )
 
         else:
