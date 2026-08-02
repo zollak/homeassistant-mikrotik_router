@@ -4,45 +4,28 @@ on:
   release:
     types: [published]
 
-jobs:
+# homelab: GitHub made the default workflow token read-only, and the old actions
+# (checkout@v2 / setup-python@v1 / upload-release-action@v1-release) are deprecated,
+# which broke the automatic zip upload. This is our maintained release.yml on the
+# homelab branch: modern actions + explicit contents:write so a new release builds and
+# attaches mikrotik_router.zip automatically (no more manual upload). Release notes are
+# written by hand in the GitHub release body (auto-releasenotes step dropped).
+permissions:
+  contents: write
 
+jobs:
   release_zip:
-    name: Prepare release
+    name: Build and upload release zip
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Zip mikrotik_router dir
         run: |
-          cd /home/runner/work/homeassistant-mikrotik_router/homeassistant-mikrotik_router/custom_components/mikrotik_router
-          zip mikrotik_router.zip -r ./
+          cd custom_components/mikrotik_router
+          zip -r mikrotik_router.zip ./ -x '*__pycache__*' -x '*.pyc'
+
       - name: Upload zip to release
-        uses: svenstaro/upload-release-action@v1-release
-
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: /home/runner/work/homeassistant-mikrotik_router/homeassistant-mikrotik_router/custom_components/mikrotik_router/mikrotik_router.zip
-          asset_name: mikrotik_router.zip
-          tag: ${{ github.ref }}
-          overwrite: true
-
-  releasenotes:
-    name: Prepare releasenotes
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.13
-
-      - name: Install requirements
-        run: |
-          python3 -m pip install setuptools wheel PyGithub
-
-      - name: Update release notes
-        run: |
-          python3 /home/runner/work/homeassistant-mikrotik_router/homeassistant-mikrotik_router/.github/generate_releasenotes.py --token ${{ secrets.GITHUB_TOKEN }} --release yes --tag ${{ github.ref }}
+          files: custom_components/mikrotik_router/mikrotik_router.zip
