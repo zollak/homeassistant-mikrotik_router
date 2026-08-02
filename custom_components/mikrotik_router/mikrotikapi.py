@@ -1,5 +1,7 @@
 """Mikrotik API for Mikrotik Router."""
 
+from __future__ import annotations
+
 import logging
 import ssl
 from time import time
@@ -106,7 +108,7 @@ class MikrotikAPI:
         self._connection = None
         self._connection_epoch = 0
 
- # ---------------------------
+    # ---------------------------
     #   connect
     # ---------------------------
     def connect(self) -> bool:
@@ -119,16 +121,7 @@ class MikrotikAPI:
             "encoding": self._encoding,
             "port": self._port,
         }
-
-        if isinstance(self._login_method, str):
-            if self._login_method == "plain":
-                from librouteros.login import plain
-                kwargs["login_method"] = plain
-            elif self._login_method == "token":
-                from librouteros.login import token
-                kwargs["login_method"] = token
-        else:
-            kwargs["login_method"] = self._login_method
+        kwargs.update(self._login_kwargs())
 
         self.lock.acquire()
         try:
@@ -143,10 +136,56 @@ class MikrotikAPI:
                         ssl_context.verify_mode = ssl.CERT_NONE
                     self._ssl_wrapper = ssl_context.wrap_socket
                 kwargs["ssl_wrapper"] = self._ssl_wrapper
-            
+
             self._connection = librouteros.connect(
                 self._host, self._username, self._password, **kwargs
             )
+        except TypeError as e:
+            # Retry only for login kwarg name mismatches between librouteros
+            # 3.x (login_methods) and 4.x (login_method).
+            error_text = str(e)
+            if "login_method" not in error_text:
+                if not self.connection_error_reported:
+                    _LOGGER.error(
+                        "Mikrotik %s error while connecting: %s",
+                        self._host,
+                        e,
+                    )
+                    self.connection_error_reported = True
+                self.error_to_strings(error_text)
+                self._connection = None
+                self.lock.release()
+                return False
+
+            if not self._swap_login_kwarg(kwargs):
+                if not self.connection_error_reported:
+                    _LOGGER.error(
+                        "Mikrotik %s librouteros API mismatch while connecting: %s",
+                        self._host,
+                        e,
+                    )
+                    self.connection_error_reported = True
+                self.error = "librouteros_api_mismatch"
+                self._connection = None
+                self.lock.release()
+                return False
+
+            try:
+                self._connection = librouteros.connect(
+                    self._host, self._username, self._password, **kwargs
+                )
+            except Exception as retry_error:
+                if not self.connection_error_reported:
+                    _LOGGER.error(
+                        "Mikrotik %s error while connecting: %s",
+                        self._host,
+                        retry_error,
+                    )
+                    self.connection_error_reported = True
+                self.error_to_strings(f"{retry_error}")
+                self._connection = None
+                self.lock.release()
+                return False
         except Exception as e:
             if not self.connection_error_reported:
                 _LOGGER.error("Mikrotik %s error while connecting: %s", self._host, e)
@@ -156,18 +195,77 @@ class MikrotikAPI:
             self._connection = None
             self.lock.release()
             return False
-        else:
-            if self.connection_error_reported:
-                _LOGGER.warning("Mikrotik Reconnected to %s", self._host)
-                self.connection_error_reported = False
-            else:
-                _LOGGER.debug("Mikrotik Connected to %s", self._host)
 
-            self._connected = True
-            self._reconnected = True
-            self.lock.release()
+        if self.connection_error_reported:
+            _LOGGER.warning("Mikrotik Reconnected to %s", self._host)
+            self.connection_error_reported = False
+        else:
+            _LOGGER.debug("Mikrotik Connected to %s", self._host)
+
+        self._connected = True
+        self._reconnected = True
+        self.lock.release()
 
         return self._connected
+
+    # ---------------------------
+    #   _login_callable
+    # ---------------------------
+    def _login_callable(self):
+        """Resolve configured login method to a librouteros callable."""
+        if callable(self._login_method):
+            return self._login_method
+
+        from librouteros.login import plain, token
+
+        if self._login_method == "token":
+            return token
+        return plain
+
+    # ---------------------------
+    #   _librouteros_major
+    # ---------------------------
+    @staticmethod
+    def _librouteros_major() -> int | None:
+        """Return librouteros major version when available."""
+        version = getattr(librouteros, "__version__", None)
+        if not version:
+            return None
+        try:
+            return int(str(version).split(".", maxsplit=1)[0])
+        except (TypeError, ValueError):
+            return None
+
+    # ---------------------------
+    #   _login_kwargs
+    # ---------------------------
+    def _login_kwargs(self) -> dict:
+        """Build login kwargs compatible with librouteros 3.x and 4.x."""
+        major = self._librouteros_major()
+        # Prefer callables on 4.x / unknown; keep legacy string/value on 3.x.
+        if major is None or major >= 4:
+            return {"login_method": self._login_callable()}
+        if isinstance(self._login_method, str):
+            return {"login_methods": self._login_method}
+        return {"login_methods": self._login_callable()}
+
+    # ---------------------------
+    #   _swap_login_kwarg
+    # ---------------------------
+    def _swap_login_kwarg(self, kwargs: dict) -> bool:
+        """Swap login_method/login_methods when the installed library disagrees."""
+        if "login_method" in kwargs:
+            value = kwargs.pop("login_method")
+            # 3.x historically accepted the configured string name.
+            kwargs["login_methods"] = (
+                self._login_method if isinstance(self._login_method, str) else value
+            )
+            return True
+        if "login_methods" in kwargs:
+            kwargs.pop("login_methods")
+            kwargs["login_method"] = self._login_callable()
+            return True
+        return False
 
     # ---------------------------
     #   error_to_strings
@@ -177,6 +275,14 @@ class MikrotikAPI:
         self.error = "cannot_connect"
         if error == "invalid user name or password (6)":
             self.error = "wrong_login"
+
+        if "unexpected keyword argument 'login_method" in error or (
+            "unexpected keyword argument 'login_methods" in error
+        ):
+            self.error = "librouteros_api_mismatch"
+
+        if "'str' object is not callable" in error:
+            self.error = "librouteros_api_mismatch"
 
         if "ALERT_HANDSHAKE_FAILURE" in error:
             self.error = "ssl_handshake_failure"

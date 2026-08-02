@@ -18,6 +18,8 @@ from homeassistant.helpers import entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
 
+from .helper import parse_routeros_major_minor
+
 
 from homeassistant.const import (
     CONF_NAME,
@@ -707,7 +709,7 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             ],
         )
 
-        #if tmp_user[self.config_entry.data[CONF_USERNAME]]["group"] in tmp_group:
+        # if tmp_user[self.config_entry.data[CONF_USERNAME]]["group"] in tmp_group:
         current_user = self.config_entry.data.get(CONF_USERNAME)
         if current_user in tmp_user:
             if tmp_user[current_user]["group"] in tmp_group:
@@ -1610,12 +1612,12 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             self.ds["fw-update"]["available"] = False
 
         if self.ds["fw-update"]["installed-version"] != "unknown":
+            full_version = self.ds["fw-update"].get("installed-version")
             try:
-                full_version = self.ds["fw-update"].get("installed-version")
-                split_end = min(len(full_version), 4)
-                version = re.sub("[^0-9\\.]", "", full_version[0:split_end])
-                self.major_fw_version = int(version.split(".")[0])
-                self.minor_fw_version = int(version.split(".")[1])
+                # RouterOS may report "7.23 (stable)", "7.23.1", etc.
+                self.major_fw_version, self.minor_fw_version = (
+                    parse_routeros_major_minor(full_version)
+                )
                 _LOGGER.debug(
                     "Mikrotik %s FW version major=%s minor=%s (%s)",
                     self.host,
@@ -1623,11 +1625,12 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                     self.minor_fw_version,
                     full_version,
                 )
-            except Exception:
+            except Exception as err:
                 _LOGGER.error(
-                    "Mikrotik %s unable to determine major FW version (%s).",
+                    "Mikrotik %s unable to determine major/minor FW version (%s): %s",
                     self.host,
                     full_version,
+                    err,
                 )
 
     # ---------------------------

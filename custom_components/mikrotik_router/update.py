@@ -19,6 +19,7 @@ from homeassistant.components.update import (
 
 from .coordinator import MikrotikCoordinator
 from .entity import MikrotikEntity, async_add_entities
+from .helper import normalize_routeros_version
 from .update_types import (
     SENSOR_TYPES,
     SENSOR_SERVICES,
@@ -194,8 +195,8 @@ async def fetch_changelog(session, version: str) -> str:
 
 def generate_version_list(start_version: str, end_version: str) -> list:
     """Generate a list of version strings from start_version to end_version in reverse order."""
-    start = Version(start_version)
-    end = Version(end_version)
+    start = Version(normalize_routeros_version(start_version))
+    end = Version(normalize_routeros_version(end_version))
     versions = []
 
     current = end

@@ -3,55 +3,51 @@ name: CI
 on:
   push:
     paths:
-      - 'custom_components/**'
-      - 'tests/**'
+      - "custom_components/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'custom_components/**'
-      - 'tests/**'
+      - "custom_components/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 jobs:
-
   black:
     name: Python Code Format Check
     runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v3"
-      - name: Black Code Format Check
-        uses: lgeiger/black-action@master
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          args: ". --check --fast --diff"
+          python-version: "3.13"
+      - name: Black Code Format Check
+        run: |
+          python -m pip install --upgrade pip black
+          black . --check --fast --diff
 
   tests:
     name: Python Tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v3"
+        uses: actions/checkout@v4
       - name: Set up Python 3.13
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-      - name: Generate Requirements lists
-        run: |
-          python3 .github/generate_requirements.py
-      - name: Install dependencies
+          python-version: "3.13"
+      - name: Install lint dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements_tests.txt
+          pip install flake8
       - name: Lint with flake8
         run: |
-          pip install flake8
-          flake8 . --count --select=E9,F63,F7,F82 --ignore W503,E722,F722  --show-source --statistics
+          flake8 . --count --select=E9,F63,F7,F82 --ignore W503,E722,F722 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=15 --max-line-length=127 --statistics
-  #     - name: Test with pytest
-  #       run: |
-  #         pip install pytest
-  #         pytest
 
   security:
     name: Security check - Bandit
@@ -59,15 +55,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v3"
-      - name: Security check - Bandit
-        uses: ioggstream/bandit-report-artifacts@v0.0.2
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          project_path: custom_components/mikrotik_router
-          config_file: .github/bandit.yaml
-          ignore_failure: false
+          python-version: "3.13"
+      - name: Run Bandit
+        run: |
+          python -m pip install --upgrade pip bandit
+          mkdir -p output
+          bandit -r custom_components/mikrotik_router -ll -f txt | tee output/security_report.txt
       - name: Security check report artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Security report
           path: output/security_report.txt
@@ -75,9 +74,9 @@ jobs:
   validate:
     name: Check hassfest
     needs: [tests]
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v3"
+        uses: actions/checkout@v4
       - name: Run hassfest
         uses: home-assistant/actions/hassfest@master

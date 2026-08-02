@@ -21,7 +21,8 @@
             "ssl_handshake_failure": "SSL handshake failure",
             "connection_timeout": "Mikrotik connection timeout.",
             "wrong_login": "Invalid user name or password.",
-            "ssl_verify_failure": "Certificate verify failed"
+            "ssl_verify_failure": "Certificate verify failed",
+            "librouteros_api_mismatch": "Incompatible librouteros API; update this integration."
         }
     },
     "options": {
