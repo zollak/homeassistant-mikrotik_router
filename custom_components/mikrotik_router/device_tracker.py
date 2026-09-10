@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any, Callable
 
-from homeassistant.components.device_tracker.config_entry import ScannerEntity
+from homeassistant.components.device_tracker import ScannerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import STATE_NOT_HOME
@@ -17,7 +17,6 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import slugify
 from homeassistant.util.dt import utcnow
 
 from homeassistant.components.device_tracker.const import SourceType
@@ -54,16 +53,11 @@ async def async_add_entities(
         if coordinator.data is None:
             return
 
-        async def async_check_exist(obj, coordinator, uid: None) -> None:
+        async def async_check_exist(obj) -> None:
             """Check entity exists."""
             entity_registry = er.async_get(hass)
-            if uid:
-                unique_id = f"{obj._inst.lower()}-{obj.entity_description.key}-{slugify(str(obj._data[obj.entity_description.data_reference]).lower())}"
-            else:
-                unique_id = f"{obj._inst.lower()}-{obj.entity_description.key}"
-
             entity_id = entity_registry.async_get_entity_id(
-                platform.domain, DOMAIN, unique_id
+                platform.domain, DOMAIN, obj.unique_id
             )
             entity = entity_registry.async_get(entity_id)
             if entity is None or (
@@ -80,7 +74,7 @@ async def async_add_entities(
                 obj = dispatcher[entity_description.func](
                     coordinator, entity_description
                 )
-                await async_check_exist(obj, coordinator, None)
+                await async_check_exist(obj)
             else:
                 for uid in data:
                     if _skip_sensor(config_entry, entity_description, data, uid):
@@ -88,7 +82,7 @@ async def async_add_entities(
                     obj = dispatcher[entity_description.func](
                         coordinator, entity_description, uid
                     )
-                    await async_check_exist(obj, coordinator, uid)
+                    await async_check_exist(obj)
 
     await async_update_controller(
         hass.data[DOMAIN][config_entry.entry_id].tracker_coordinator
@@ -117,7 +111,7 @@ async def async_setup_entry(
 # ---------------------------
 #   MikrotikDeviceTracker
 # ---------------------------
-class MikrotikDeviceTracker(MikrotikEntity, ScannerEntity):
+class MikrotikDeviceTracker(ScannerEntity, MikrotikEntity):
     """Representation of a device tracker."""
 
     def __init__(
@@ -129,6 +123,11 @@ class MikrotikDeviceTracker(MikrotikEntity, ScannerEntity):
         """Initialize entity"""
         super().__init__(coordinator, entity_description, uid)
         self._attr_name = None
+
+    @property
+    def unique_id(self) -> str:
+        """Return the integration-specific unique ID."""
+        return self._mikrotik_unique_id()
 
     @property
     def ip_address(self) -> str:
