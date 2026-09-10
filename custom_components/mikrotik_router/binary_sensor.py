@@ -39,7 +39,7 @@ _LOGGER = getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: MikrotikConfigEntry,
-    _async_add_entities: AddEntitiesCallback,
+    add_entities_callback: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""
     dispatcher = {
@@ -47,7 +47,14 @@ async def async_setup_entry(
         "MikrotikPPPSecretBinarySensor": MikrotikPPPSecretBinarySensor,
         "MikrotikPortBinarySensor": MikrotikPortBinarySensor,
     }
-    await async_add_entities(hass, config_entry, dispatcher)
+    await async_add_entities(
+        hass,
+        config_entry,
+        add_entities_callback,
+        dispatcher,
+        SENSOR_TYPES,
+        SENSOR_SERVICES,
+    )
 
 
 # ---------------------------
@@ -91,11 +98,6 @@ class MikrotikPPPSecretBinarySensor(MikrotikBinarySensor):
             else False
         )
 
-    # @property
-    # def available(self) -> bool:
-    #     """Return if controller is available."""
-    #     return self._ctrl.connected() if self.option_sensor_ppp else False
-
 
 # ---------------------------
 #   MikrotikPortBinarySensor
@@ -109,11 +111,6 @@ class MikrotikPortBinarySensor(MikrotikBinarySensor):
         return self._config_entry.options.get(
             CONF_SENSOR_PORT_TRACKER, DEFAULT_SENSOR_PORT_TRACKER
         )
-
-    # @property
-    # def available(self) -> bool:
-    #     """Return if controller is available."""
-    #     return self._ctrl.connected() if self.option_sensor_port_tracker else False
 
     @property
     def icon(self) -> str:

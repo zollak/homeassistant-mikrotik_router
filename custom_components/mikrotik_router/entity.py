@@ -9,12 +9,9 @@ from typing import Any, Callable, TypeVar
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import (
-    entity_platform as ep,
-    entity_registry as er,
-)
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
@@ -100,60 +97,65 @@ def _skip_sensor(config_entry, entity_description, data, uid) -> bool:
 async def async_add_entities(
     hass: HomeAssistant,
     config_entry: MikrotikConfigEntry,
+    add_entities_callback: AddEntitiesCallback,
     dispatcher: dict[str, Callable],
+    descriptions,
+    services,
+    coordinator=None,
 ):
     """Add entities."""
-    platform = ep.async_get_current_platform()
-    services = platform.platform.SENSOR_SERVICES
-    descriptions = platform.platform.SENSOR_TYPES
+    if services:
+        platform = ep.async_get_current_platform()
+        for service in services:
+            platform.async_register_entity_service(service[0], service[1], service[2])
 
-    for service in services:
-        platform.async_register_entity_service(service[0], service[1], service[2])
+    if coordinator is None:
+        coordinator = config_entry.runtime_data.data_coordinator
+
+    known_unique_ids = set()
 
     @callback
-    async def async_update_controller(coordinator):
-        """Update the values of the controller."""
+    def async_update_controller():
+        """Add entities discovered in the latest coordinator data."""
+        if coordinator.data is None:
+            return
 
-        async def async_check_exist(obj, coordinator, uid: None) -> None:
-            """Check entity exists."""
-            entity_registry = er.async_get(hass)
-            if uid:
-                unique_id = f"{obj._inst.lower()}-{obj.entity_description.key}-{slugify(str(obj._data[obj.entity_description.data_reference]).lower())}"
-            else:
-                unique_id = f"{obj._inst.lower()}-{obj.entity_description.key}"
-
-            entity_id = entity_registry.async_get_entity_id(
-                platform.domain, DOMAIN, unique_id
-            )
-            entity = entity_registry.async_get(entity_id)
-            if entity is None or (
-                (entity_id not in platform.entities) and (entity.disabled is False)
-            ):
-                _LOGGER.debug("Add entity %s", entity_id)
-                await platform.async_add_entities([obj])
+        new_entities = []
 
         for entity_description in descriptions:
-            data = coordinator.data[entity_description.data_path]
+            data = coordinator.data.get(entity_description.data_path)
+            if not isinstance(data, dict):
+                continue
+
             if not entity_description.data_reference:
                 if data.get(entity_description.data_attribute) is None:
                     continue
-                obj = dispatcher[entity_description.func](
-                    coordinator, entity_description
-                )
-                await async_check_exist(obj, coordinator, None)
+                uids = (None,)
             else:
-                for uid in data:
-                    if _skip_sensor(config_entry, entity_description, data, uid):
-                        continue
-                    obj = dispatcher[entity_description.func](
-                        coordinator, entity_description, uid
-                    )
-                    await async_check_exist(obj, coordinator, uid)
+                uids = tuple(data)
 
-    await async_update_controller(config_entry.runtime_data.data_coordinator)
+            for uid in uids:
+                if uid is not None and _skip_sensor(
+                    config_entry, entity_description, data, uid
+                ):
+                    continue
 
-    unsub = async_dispatcher_connect(hass, "update_sensors", async_update_controller)
-    config_entry.async_on_unload(unsub)
+                obj = dispatcher[entity_description.func](
+                    coordinator, entity_description, uid
+                )
+                if obj.unique_id in known_unique_ids:
+                    continue
+
+                known_unique_ids.add(obj.unique_id)
+                new_entities.append(obj)
+
+        if new_entities:
+            add_entities_callback(new_entities)
+
+    async_update_controller()
+    config_entry.async_on_unload(
+        coordinator.async_add_listener(async_update_controller)
+    )
 
 
 _MikrotikCoordinatorT = TypeVar(
@@ -227,12 +229,30 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self._data = self.coordinator.data[self.entity_description.data_path]
-        if self._uid:
-            self._data = self.coordinator.data[self.entity_description.data_path][
-                self._uid
-            ]
+        data = self.coordinator.data
+        path_data = data.get(self.entity_description.data_path) if data else None
+        if isinstance(path_data, dict):
+            if self._uid:
+                if self._uid in path_data:
+                    self._data = path_data[self._uid]
+            elif path_data.get(self.entity_description.data_attribute) is not None:
+                self._data = path_data
         super()._handle_coordinator_update()
+
+    @property
+    def available(self) -> bool:
+        """Return whether the coordinator and backing data are available."""
+        if not super().available or self.coordinator.data is None:
+            return False
+
+        data = self.coordinator.data.get(self.entity_description.data_path)
+        if not isinstance(data, dict):
+            return False
+
+        if self._uid:
+            return self._uid in data
+
+        return data.get(self.entity_description.data_attribute) is not None
 
     @property
     def custom_name(self) -> str:
@@ -268,11 +288,6 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
             return f"{self._inst.lower()}-{self.entity_description.key}-{slugify(str(self._data[self.entity_description.data_reference]).lower())}"
 
         return f"{self._inst.lower()}-{self.entity_description.key}"
-
-    # @property
-    # def available(self) -> bool:
-    #     """Return if controller is available"""
-    #     return self.coordinator.connected()
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -5,24 +5,18 @@ from __future__ import annotations
 from logging import getLogger
 from collections.abc import Mapping
 from datetime import timedelta
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.components.device_tracker import ScannerEntity
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import (
-    entity_platform as ep,
-    entity_registry as er,
-)
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.dt import utcnow
 
 from .device_tracker_types import SENSOR_TYPES, SENSOR_SERVICES
 from .coordinator import MikrotikConfigEntry, MikrotikCoordinator
-from .entity import _skip_sensor, MikrotikEntity
+from .entity import MikrotikEntity, async_add_entities
 from .helper import format_attribute
 from .const import (
-    DOMAIN,
     CONF_TRACK_HOSTS,
     DEFAULT_TRACK_HOSTS,
     CONF_TRACK_HOSTS_TIMEOUT,
@@ -32,76 +26,28 @@ from .const import (
 _LOGGER = getLogger(__name__)
 
 
-async def async_add_entities(
-    hass: HomeAssistant,
-    config_entry: MikrotikConfigEntry,
-    dispatcher: dict[str, Callable],
-):
-    """Add entities."""
-    platform = ep.async_get_current_platform()
-    services = platform.platform.SENSOR_SERVICES
-    descriptions = platform.platform.SENSOR_TYPES
-
-    for service in services:
-        platform.async_register_entity_service(service[0], service[1], service[2])
-
-    @callback
-    async def async_update_controller(coordinator):
-        """Update the values of the controller."""
-        if coordinator.data is None:
-            return
-
-        async def async_check_exist(obj) -> None:
-            """Check entity exists."""
-            entity_registry = er.async_get(hass)
-            entity_id = entity_registry.async_get_entity_id(
-                platform.domain, DOMAIN, obj.unique_id
-            )
-            entity = entity_registry.async_get(entity_id)
-            if entity is None or (
-                (entity_id not in platform.entities) and (entity.disabled is False)
-            ):
-                _LOGGER.debug("Add entity %s", entity_id)
-                await platform.async_add_entities([obj])
-
-        for entity_description in descriptions:
-            data = coordinator.data[entity_description.data_path]
-            if not entity_description.data_reference:
-                if data.get(entity_description.data_attribute) is None:
-                    continue
-                obj = dispatcher[entity_description.func](
-                    coordinator, entity_description
-                )
-                await async_check_exist(obj)
-            else:
-                for uid in data:
-                    if _skip_sensor(config_entry, entity_description, data, uid):
-                        continue
-                    obj = dispatcher[entity_description.func](
-                        coordinator, entity_description, uid
-                    )
-                    await async_check_exist(obj)
-
-    await async_update_controller(config_entry.runtime_data.tracker_coordinator)
-
-    unsub = async_dispatcher_connect(hass, "update_sensors", async_update_controller)
-    config_entry.async_on_unload(unsub)
-
-
 # ---------------------------
 #   async_setup_entry
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: MikrotikConfigEntry,
-    _async_add_entities: AddEntitiesCallback,
+    add_entities_callback: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""
     dispatcher = {
         "MikrotikDeviceTracker": MikrotikDeviceTracker,
         "MikrotikHostDeviceTracker": MikrotikHostDeviceTracker,
     }
-    await async_add_entities(hass, config_entry, dispatcher)
+    await async_add_entities(
+        hass,
+        config_entry,
+        add_entities_callback,
+        dispatcher,
+        SENSOR_TYPES,
+        SENSOR_SERVICES,
+        config_entry.runtime_data.tracker_coordinator,
+    )
 
 
 # ---------------------------
