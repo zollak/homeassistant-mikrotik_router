@@ -171,7 +171,7 @@ You can find it under "Integrations", named "Mikrotik Router"
 
 Minimum requirements:
 * RouterOS v6.43/v7.1
-* Home Assistant 0.114.0
+* Home Assistant 2026.8.0
 
 ## Using Mikrotik development branch
 If you are using development branch for mikrotik, some features may stop working due to major changes in RouterOS.
