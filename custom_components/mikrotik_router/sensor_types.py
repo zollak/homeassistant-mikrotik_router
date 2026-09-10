@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.const import (
-    PERCENTAGE,
     REVOLUTIONS_PER_MINUTE,
     UnitOfTemperature,
     UnitOfDataRate,
@@ -21,6 +20,7 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfElectricCurrent,
     UnitOfPower,
+    UnitOfRatio,
 )
 
 from .const import DOMAIN
@@ -435,7 +435,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_cpu-load",
         name="CPU load",
         icon="mdi:speedometer",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,
@@ -450,7 +450,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_memory-usage",
         name="Memory usage",
         icon="mdi:memory",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,
@@ -465,7 +465,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_hdd-usage",
         name="HDD usage",
         icon="mdi:harddisk",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,
