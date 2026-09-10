@@ -13,6 +13,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.const import (
     CONF_HOST,
+    CONF_NAME,
     CONF_PORT,
     CONF_SSL,
     CONF_VERIFY_SSL,
@@ -47,6 +48,7 @@ async def async_setup_entry(
     coordinator = MikrotikCoordinator(hass, config_entry)
     await coordinator.async_config_entry_first_refresh()
     _async_update_router_unique_id(hass, config_entry, coordinator)
+    _async_setup_router_device(hass, config_entry, coordinator)
     coordinatorTracker = MikrotikTrackerCoordinator(hass, config_entry, coordinator)
     await coordinatorTracker.async_config_entry_first_refresh()
     config_entry.runtime_data = MikrotikData(
@@ -59,6 +61,28 @@ async def async_setup_entry(
     config_entry.async_on_unload(config_entry.add_update_listener(async_reload_entry))
 
     return True
+
+
+# ---------------------------
+#   _async_setup_router_device
+# ---------------------------
+def _async_setup_router_device(
+    hass: HomeAssistant,
+    config_entry: MikrotikConfigEntry,
+    coordinator: MikrotikCoordinator,
+) -> None:
+    """Set up the router device before its child devices."""
+    serial_number = f"{coordinator.data['routerboard']['serial-number']}"
+    device_registry.async_get(hass).async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        connections={(DOMAIN, serial_number)},
+        identifiers={(DOMAIN, serial_number)},
+        name=f"{config_entry.data[CONF_NAME]} {coordinator.data['resource']['board-name']}",
+        model=f"{coordinator.data['resource']['board-name']}",
+        manufacturer=f"{coordinator.data['resource']['platform']}",
+        sw_version=f"{coordinator.data['resource']['version']}",
+        configuration_url=f"http://{config_entry.data[CONF_HOST]}",
+    )
 
 
 # ---------------------------

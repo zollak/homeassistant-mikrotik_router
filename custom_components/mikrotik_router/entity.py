@@ -9,6 +9,7 @@ from typing import Any, Callable, TypeVar
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import device_registry
 from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -324,7 +325,17 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
                 sw_version=f"{self.coordinator.data['resource']['version']}",
                 configuration_url=f"http://{self.coordinator.config_entry.data[CONF_HOST]}",
             )
-        elif "mac-address" in self.entity_description.data_reference:
+
+        via_device_id = device_registry.async_get_device_id_by_identifier(
+            self.hass,
+            (
+                DOMAIN,
+                f"{self.coordinator.data['routerboard']['serial-number']}",
+            ),
+            config_entry_id=self._config_entry.entry_id,
+        )
+
+        if "mac-address" in self.entity_description.data_reference:
             dev_group = self._data[self.entity_description.data_name]
             dev_manufacturer = ""
             if dev_connection_value in self.coordinator.data["host"]:
@@ -337,23 +348,17 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
 
             return DeviceInfo(
                 connections={(dev_connection, f"{dev_connection_value}")},
-                default_name=f"{dev_group}",
-                default_manufacturer=f"{dev_manufacturer}",
-                via_device=(
-                    DOMAIN,
-                    f"{self.coordinator.data['routerboard']['serial-number']}",
-                ),
+                name=f"{dev_group}",
+                manufacturer=f"{dev_manufacturer}",
+                via_device_id=via_device_id,
             )
         else:
             return DeviceInfo(
                 connections={(dev_connection, f"{dev_connection_value}")},
-                default_name=f"{self._inst} {dev_group}",
-                default_model=f"{self.coordinator.data['resource']['board-name']}",
-                default_manufacturer=f"{self.coordinator.data['resource']['platform']}",
-                via_device=(
-                    DOMAIN,
-                    f"{self.coordinator.data['routerboard']['serial-number']}",
-                ),
+                name=f"{self._inst} {dev_group}",
+                model=f"{self.coordinator.data['resource']['board-name']}",
+                manufacturer=f"{self.coordinator.data['resource']['platform']}",
+                via_device_id=via_device_id,
             )
 
     @property
