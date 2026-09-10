@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import MikrotikEntity, async_add_entities
+from .coordinator import MikrotikConfigEntry
 from .button_types import (
     SENSOR_TYPES,
     SENSOR_SERVICES,
@@ -19,7 +19,7 @@ from .button_types import (
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MikrotikConfigEntry,
     _async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""

@@ -6,13 +6,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
+from .coordinator import MikrotikConfigEntry
 from .entity import MikrotikEntity, async_add_entities
 from .helper import format_attribute
 from .switch_types import (
@@ -29,7 +29,7 @@ from .switch_types import (
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MikrotikConfigEntry,
     _async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""

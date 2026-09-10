@@ -11,8 +11,6 @@ from homeassistant.components.device_tracker.const import CONF_ASSOCIATED_ZONE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry, entity_registry
-from homeassistant.config_entries import ConfigEntry
-
 from homeassistant.const import (
     CONF_HOST,
     CONF_PORT,
@@ -24,7 +22,12 @@ from homeassistant.const import (
 from homeassistant.util import slugify
 
 from .const import PLATFORMS, DOMAIN, DEFAULT_VERIFY_SSL
-from .coordinator import MikrotikData, MikrotikCoordinator, MikrotikTrackerCoordinator
+from .coordinator import (
+    MikrotikConfigEntry,
+    MikrotikData,
+    MikrotikCoordinator,
+    MikrotikTrackerCoordinator,
+)
 from .helper import router_unique_id
 
 SCRIPT_SCHEMA = vol.Schema(
@@ -37,14 +40,16 @@ _LOGGER = logging.getLogger(__name__)
 # ---------------------------
 #   async_setup_entry
 # ---------------------------
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: MikrotikConfigEntry
+) -> bool:
     """Set up a config entry."""
     coordinator = MikrotikCoordinator(hass, config_entry)
     await coordinator.async_config_entry_first_refresh()
     _async_update_router_unique_id(hass, config_entry, coordinator)
     coordinatorTracker = MikrotikTrackerCoordinator(hass, config_entry, coordinator)
     await coordinatorTracker.async_config_entry_first_refresh()
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = MikrotikData(
+    config_entry.runtime_data = MikrotikData(
         data_coordinator=coordinator,
         tracker_coordinator=coordinatorTracker,
     )
@@ -61,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 # ---------------------------
 def _async_update_router_unique_id(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MikrotikConfigEntry,
     coordinator: MikrotikCoordinator,
 ) -> None:
     """Upgrade a fallback config-entry ID to a RouterBOARD serial."""
@@ -94,7 +99,9 @@ def _async_update_router_unique_id(
 # ---------------------------
 #   async_reload_entry
 # ---------------------------
-async def async_reload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+async def async_reload_entry(
+    hass: HomeAssistant, config_entry: MikrotikConfigEntry
+) -> None:
     """Reload the config entry when it changed."""
     await hass.config_entries.async_reload(config_entry.entry_id)
 
@@ -102,22 +109,18 @@ async def async_reload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 # ---------------------------
 #   async_unload_entry
 # ---------------------------
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, config_entry: MikrotikConfigEntry
+) -> bool:
     """Unload a config entry."""
-
-    if unload_ok := await hass.config_entries.async_unload_platforms(
-        config_entry, PLATFORMS
-    ):
-        hass.data[DOMAIN].pop(config_entry.entry_id)
-
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
 
 
 # ---------------------------
 #   async_remove_config_entry_device
 # ---------------------------
 async def async_remove_config_entry_device(
-    hass, config_entry: ConfigEntry, device_entry: device_registry.DeviceEntry
+    hass, config_entry: MikrotikConfigEntry, device_entry: device_registry.DeviceEntry
 ) -> bool:
     """Remove a config entry from a device."""
     return True
@@ -145,7 +148,7 @@ def _legacy_zone_entity_id(hass: HomeAssistant, legacy_zone) -> str:
 
 
 def _async_migrate_device_tracker_zones(
-    hass: HomeAssistant, config_entry: ConfigEntry, legacy_zone
+    hass: HomeAssistant, config_entry: MikrotikConfigEntry, legacy_zone
 ) -> None:
     """Move the integration-wide zone to per-entity tracker options."""
     registry = entity_registry.async_get(hass)
@@ -167,7 +170,7 @@ def _async_migrate_device_tracker_zones(
         )
 
 
-async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+async def async_migrate_entry(hass: HomeAssistant, config_entry: MikrotikConfigEntry):
     _LOGGER.debug(
         "Migrating configuration from version %s.%s",
         config_entry.version,

@@ -104,21 +104,24 @@ class MikrotikData:
     tracker_coordinator: MikrotikTrackerCoordinator
 
 
+type MikrotikConfigEntry = ConfigEntry[MikrotikData]
+
+
 class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: MikrotikConfigEntry,
         coordinator: MikrotikCoordinator,
     ):
         """Initialize MikrotikTrackerCoordinator."""
         self.hass = hass
-        self.config_entry: ConfigEntry = config_entry
         self.coordinator = coordinator
 
         super().__init__(
             self.hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=10),
         )
@@ -207,13 +210,14 @@ class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
 class MikrotikCoordinator(DataUpdateCoordinator[None]):
     """MikrotikCoordinator Class"""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+    def __init__(self, hass: HomeAssistant, config_entry: MikrotikConfigEntry):
         """Initialize MikrotikCoordinator."""
         self.hass = hass
-        self.config_entry: ConfigEntry = config_entry
+        self.config_entry: MikrotikConfigEntry = config_entry
         super().__init__(
             self.hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=self.option_scan_interval,
         )

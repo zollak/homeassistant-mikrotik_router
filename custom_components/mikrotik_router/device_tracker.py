@@ -8,7 +8,6 @@ from datetime import timedelta
 from typing import Any, Callable
 
 from homeassistant.components.device_tracker import ScannerEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import (
     entity_platform as ep,
@@ -19,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.dt import utcnow
 
 from .device_tracker_types import SENSOR_TYPES, SENSOR_SERVICES
-from .coordinator import MikrotikCoordinator
+from .coordinator import MikrotikConfigEntry, MikrotikCoordinator
 from .entity import _skip_sensor, MikrotikEntity
 from .helper import format_attribute
 from .const import (
@@ -34,7 +33,9 @@ _LOGGER = getLogger(__name__)
 
 
 async def async_add_entities(
-    hass: HomeAssistant, config_entry: ConfigEntry, dispatcher: dict[str, Callable]
+    hass: HomeAssistant,
+    config_entry: MikrotikConfigEntry,
+    dispatcher: dict[str, Callable],
 ):
     """Add entities."""
     platform = ep.async_get_current_platform()
@@ -81,9 +82,7 @@ async def async_add_entities(
                     )
                     await async_check_exist(obj)
 
-    await async_update_controller(
-        hass.data[DOMAIN][config_entry.entry_id].tracker_coordinator
-    )
+    await async_update_controller(config_entry.runtime_data.tracker_coordinator)
 
     unsub = async_dispatcher_connect(hass, "update_sensors", async_update_controller)
     config_entry.async_on_unload(unsub)
@@ -94,7 +93,7 @@ async def async_add_entities(
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MikrotikConfigEntry,
     _async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""

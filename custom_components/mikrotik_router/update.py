@@ -6,7 +6,6 @@ import asyncio
 from logging import getLogger
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -17,7 +16,7 @@ from homeassistant.components.update import (
     UpdateEntityFeature,
 )
 
-from .coordinator import MikrotikCoordinator
+from .coordinator import MikrotikConfigEntry, MikrotikCoordinator
 from .entity import MikrotikEntity, async_add_entities
 from .helper import normalize_routeros_version
 from .update_types import (
@@ -35,7 +34,7 @@ DEVICE_UPDATE = "device_update"
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MikrotikConfigEntry,
     _async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""

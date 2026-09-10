@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from logging import getLogger
 from typing import Any, Callable, TypeVar
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -31,7 +30,11 @@ from .const import (
     CONF_SENSOR_NETWATCH_TRACKER,
     DEFAULT_SENSOR_NETWATCH_TRACKER,
 )
-from .coordinator import MikrotikCoordinator, MikrotikTrackerCoordinator
+from .coordinator import (
+    MikrotikConfigEntry,
+    MikrotikCoordinator,
+    MikrotikTrackerCoordinator,
+)
 from .exceptions import ApiEntryNotFound
 from .helper import format_attribute
 
@@ -95,7 +98,9 @@ def _skip_sensor(config_entry, entity_description, data, uid) -> bool:
 #   async_add_entities
 # ---------------------------
 async def async_add_entities(
-    hass: HomeAssistant, config_entry: ConfigEntry, dispatcher: dict[str, Callable]
+    hass: HomeAssistant,
+    config_entry: MikrotikConfigEntry,
+    dispatcher: dict[str, Callable],
 ):
     """Add entities."""
     platform = ep.async_get_current_platform()
@@ -145,9 +150,7 @@ async def async_add_entities(
                     )
                     await async_check_exist(obj, coordinator, uid)
 
-    await async_update_controller(
-        hass.data[DOMAIN][config_entry.entry_id].data_coordinator
-    )
+    await async_update_controller(config_entry.runtime_data.data_coordinator)
 
     unsub = async_dispatcher_connect(hass, "update_sensors", async_update_controller)
     config_entry.async_on_unload(unsub)
