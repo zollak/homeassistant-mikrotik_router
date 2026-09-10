@@ -16,8 +16,6 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_SSL,
     CONF_VERIFY_SSL,
-    CONF_ZONE,
-    STATE_HOME,
 )
 from homeassistant.core import callback
 
@@ -130,8 +128,8 @@ def configured_instances(hass):
 class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
     """MikrotikControllerConfigFlow class"""
 
-    VERSION = 2
-    MINOR_VERSION = 2
+    VERSION = 3
+    MINOR_VERSION = 1
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -359,10 +357,6 @@ class MikrotikControllerOptionsFlowHandler(OptionsFlow):
                             CONF_TRACK_HOSTS_TIMEOUT, DEFAULT_TRACK_HOST_TIMEOUT
                         ),
                     ): int,
-                    vol.Optional(
-                        CONF_ZONE,
-                        default=self.config_entry.options.get(CONF_ZONE, STATE_HOME),
-                    ): str,
                 }
             ),
         )

@@ -10,7 +10,6 @@ from typing import Any, Callable
 from homeassistant.components.device_tracker import ScannerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import STATE_NOT_HOME
 from homeassistant.helpers import (
     entity_platform as ep,
     entity_registry as er,
@@ -18,8 +17,6 @@ from homeassistant.helpers import (
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.dt import utcnow
-
-from homeassistant.components.device_tracker.const import SourceType
 
 from .device_tracker_types import SENSOR_TYPES, SENSOR_SERVICES
 from .coordinator import MikrotikCoordinator
@@ -130,35 +127,30 @@ class MikrotikDeviceTracker(ScannerEntity, MikrotikEntity):
         return self._mikrotik_unique_id()
 
     @property
-    def ip_address(self) -> str:
+    def ip_address(self) -> str | None:
         """Return the primary ip address of the device."""
         return self._data["address"] if "address" in self._data else None
 
     @property
-    def mac_address(self) -> str:
+    def mac_address(self) -> str | None:
         """Return the mac address of the device."""
         if self.entity_description.data_reference in self._data:
             return self._data[self.entity_description.data_reference]
 
-        return ""
+        return None
 
     @property
-    def hostname(self) -> str:
+    def hostname(self) -> str | None:
         """Return hostname of the device."""
         if self.entity_description.data_name in self._data:
             return self._data[self.entity_description.data_name]
 
-        return ""
+        return None
 
     @property
     def is_connected(self) -> bool:
         """Return true if device is connected."""
         return self._data[self.entity_description.data_attribute]
-
-    @property
-    def source_type(self) -> str:
-        """Return the source type of the port."""
-        return SourceType.ROUTER
 
 
 # ---------------------------
@@ -211,11 +203,6 @@ class MikrotikHostDeviceTracker(MikrotikDeviceTracker):
         ):
             return self.entity_description.icon_enabled
         return self.entity_description.icon_disabled
-
-    @property
-    def state(self) -> str:
-        """Return the state of the device."""
-        return self.coordinator.option_zone if self.is_connected else STATE_NOT_HOME
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:

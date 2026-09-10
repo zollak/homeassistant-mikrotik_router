@@ -30,8 +30,6 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_SSL,
     CONF_VERIFY_SSL,
-    CONF_ZONE,
-    STATE_HOME,
 )
 
 from .const import (
@@ -135,14 +133,6 @@ class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
             config_entry.data[CONF_SSL],
             config_entry.data[CONF_VERIFY_SSL],
         )
-
-    # ---------------------------
-    #   option_zone
-    # ---------------------------
-    @property
-    def option_zone(self):
-        """Config entry option zones."""
-        return self.config_entry.options.get(CONF_ZONE, STATE_HOME)
 
     # ---------------------------
     #   _async_update_data

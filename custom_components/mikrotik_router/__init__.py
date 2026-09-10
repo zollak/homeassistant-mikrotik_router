@@ -5,12 +5,23 @@ from __future__ import annotations
 import voluptuous as vol
 import logging
 
+from homeassistant.components import zone
+from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
+from homeassistant.components.device_tracker.const import CONF_ASSOCIATED_ZONE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry
+from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.config_entries import ConfigEntry
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SSL, CONF_VERIFY_SSL
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_SSL,
+    CONF_VERIFY_SSL,
+    CONF_ZONE,
+    STATE_HOME,
+)
+from homeassistant.util import slugify
 
 from .const import PLATFORMS, DOMAIN, DEFAULT_VERIFY_SSL
 from .coordinator import MikrotikData, MikrotikCoordinator, MikrotikTrackerCoordinator
@@ -115,6 +126,47 @@ async def async_remove_config_entry_device(
 # ---------------------------
 #   async_migrate_entry
 # ---------------------------
+def _legacy_zone_entity_id(hass: HomeAssistant, legacy_zone) -> str:
+    """Convert the legacy integration-wide zone to a zone entity ID."""
+    zone_name = str(legacy_zone or STATE_HOME).strip()
+    normalized_zone_name = zone_name.casefold()
+
+    if normalized_zone_name in (STATE_HOME, zone.ENTITY_ID_HOME):
+        return zone.ENTITY_ID_HOME
+
+    if normalized_zone_name.startswith(f"{zone.DOMAIN}."):
+        return normalized_zone_name
+
+    for zone_state in hass.states.async_all(zone.DOMAIN):
+        if zone_state.name.casefold() == normalized_zone_name:
+            return zone_state.entity_id
+
+    return f"{zone.DOMAIN}.{slugify(zone_name)}"
+
+
+def _async_migrate_device_tracker_zones(
+    hass: HomeAssistant, config_entry: ConfigEntry, legacy_zone
+) -> None:
+    """Move the integration-wide zone to per-entity tracker options."""
+    registry = entity_registry.async_get(hass)
+    associated_zone = _legacy_zone_entity_id(hass, legacy_zone)
+
+    for entry in entity_registry.async_entries_for_config_entry(
+        registry, config_entry.entry_id
+    ):
+        if entry.domain != DEVICE_TRACKER_DOMAIN or entry.platform != DOMAIN:
+            continue
+
+        tracker_options = dict(entry.options.get(DEVICE_TRACKER_DOMAIN, {}))
+        if CONF_ASSOCIATED_ZONE in tracker_options:
+            continue
+
+        tracker_options[CONF_ASSOCIATED_ZONE] = associated_zone
+        registry.async_update_entity_options(
+            entry.entity_id, DEVICE_TRACKER_DOMAIN, tracker_options
+        )
+
+
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     _LOGGER.debug(
         "Migrating configuration from version %s.%s",
@@ -123,6 +175,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     )
 
     new_data = {**config_entry.data}
+    new_options = {**config_entry.options}
     new_version = config_entry.version
     new_minor_version = config_entry.minor_version
     new_unique_id = config_entry.unique_id
@@ -141,8 +194,16 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             )
         new_minor_version = 2
 
+    if new_version < 3:
+        legacy_zone = new_options.get(CONF_ZONE, STATE_HOME)
+        _async_migrate_device_tracker_zones(hass, config_entry, legacy_zone)
+        new_options.pop(CONF_ZONE, None)
+        new_version = 3
+        new_minor_version = 1
+
     if (
         new_data != config_entry.data
+        or new_options != config_entry.options
         or new_version != config_entry.version
         or new_minor_version != config_entry.minor_version
         or new_unique_id != config_entry.unique_id
@@ -150,6 +211,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         hass.config_entries.async_update_entry(
             config_entry,
             data=new_data,
+            options=new_options,
             unique_id=new_unique_id,
             version=new_version,
             minor_version=new_minor_version,
