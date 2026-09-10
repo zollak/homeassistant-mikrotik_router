@@ -64,9 +64,53 @@ from .const import (
     DEFAULT_SENSOR_NETWATCH_TRACKER,
     CONF_SENSOR_NETWATCH_TRACKER,
 )
+from .helper import router_unique_id
 from .mikrotikapi import MikrotikAPI
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# ---------------------------
+#   validate_input
+# ---------------------------
+def validate_input(user_input):
+    """Validate connection settings and identify the router."""
+    api = MikrotikAPI(
+        host=user_input[CONF_HOST],
+        username=user_input[CONF_USERNAME],
+        password=user_input[CONF_PASSWORD],
+        port=user_input[CONF_PORT],
+        use_ssl=user_input[CONF_SSL],
+        ssl_verify=user_input[CONF_VERIFY_SSL],
+    )
+    if not api.connect():
+        return None, "invalid_auth" if api.error == "wrong_login" else api.error
+
+    resource = api.query("/system/resource")
+    if not api.connected():
+        return None, api.error or "cannot_connect"
+
+    board_name = ""
+    if resource:
+        board_name = str(resource[0].get("board-name", "")).casefold()
+
+    serial_number = None
+    if not board_name.startswith(("x86", "chr")):
+        routerboard = api.query("/system/routerboard")
+        if not api.connected():
+            return None, api.error or "cannot_connect"
+        if routerboard:
+            serial_number = routerboard[0].get("serial-number")
+
+    return (
+        router_unique_id(
+            user_input[CONF_HOST],
+            user_input[CONF_PORT],
+            user_input[CONF_SSL],
+            serial_number,
+        ),
+        None,
+    )
 
 
 # ---------------------------
@@ -87,6 +131,7 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
     """MikrotikControllerConfigFlow class"""
 
     VERSION = 2
+    MINOR_VERSION = 2
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -109,18 +154,15 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             # Check if instance with this name already exists
             if user_input[CONF_NAME] in configured_instances(self.hass):
                 errors["base"] = "name_exists"
-
-            # Test connection
-            api = MikrotikAPI(
-                host=user_input[CONF_HOST],
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                port=user_input[CONF_PORT],
-                use_ssl=user_input[CONF_SSL],
-                ssl_verify=user_input[CONF_VERIFY_SSL],
-            )
-            if not api.connect():
-                errors[CONF_HOST] = api.error
+            else:
+                unique_id, error = await self.hass.async_add_executor_job(
+                    validate_input, user_input
+                )
+                if error:
+                    errors["base"] = error
+                else:
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_configured()
 
             # Save instance
             if not errors:
@@ -143,6 +185,87 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reauth(self, entry_data):
+        """Start reauthentication for an existing entry."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Validate and save replacement credentials."""
+        config_entry = self._get_reauth_entry()
+        errors = {}
+
+        if user_input is not None:
+            updated_data = {**config_entry.data, **user_input}
+            unique_id, error = await self.hass.async_add_executor_job(
+                validate_input, updated_data
+            )
+            if error:
+                errors["base"] = error
+            else:
+                await self._async_validate_entry_identity(config_entry, unique_id)
+                return self._update_entry_and_abort(config_entry, user_input, unique_id)
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_USERNAME,
+                        default=config_entry.data[CONF_USERNAME],
+                    ): str,
+                    vol.Required(CONF_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Update connection settings for an existing entry."""
+        config_entry = self._get_reconfigure_entry()
+        errors = {}
+
+        if user_input is not None:
+            data_updates = dict(user_input)
+            if not data_updates.get(CONF_PASSWORD):
+                data_updates.pop(CONF_PASSWORD, None)
+            updated_data = {**config_entry.data, **data_updates}
+            unique_id, error = await self.hass.async_add_executor_job(
+                validate_input, updated_data
+            )
+            if error:
+                errors["base"] = error
+            else:
+                await self._async_validate_entry_identity(config_entry, unique_id)
+                return self._update_entry_and_abort(
+                    config_entry, data_updates, unique_id
+                )
+
+        return self._show_reconfigure_form(config_entry, errors)
+
+    async def _async_validate_entry_identity(self, config_entry, unique_id):
+        """Ensure recovery settings do not select a different known router."""
+        await self.async_set_unique_id(unique_id)
+        if config_entry.unique_id and not config_entry.unique_id.startswith(
+            "endpoint:"
+        ):
+            self._abort_if_unique_id_mismatch(reason="wrong_router")
+        elif config_entry.unique_id != unique_id:
+            self._abort_if_unique_id_configured()
+
+    def _update_entry_and_abort(self, config_entry, data_updates, unique_id):
+        """Update an entry and ensure the changed configuration is loaded."""
+        if config_entry.update_listeners:
+            return self.async_update_and_abort(
+                config_entry,
+                data_updates=data_updates,
+                unique_id=unique_id,
+            )
+        return self.async_update_reload_and_abort(
+            config_entry,
+            data_updates=data_updates,
+            unique_id=unique_id,
+        )
+
     # ---------------------------
     #   _show_config_form
     # ---------------------------
@@ -160,6 +283,31 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_SSL, default=user_input[CONF_SSL]): bool,
                     vol.Optional(
                         CONF_VERIFY_SSL, default=user_input[CONF_VERIFY_SSL]
+                    ): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    # ---------------------------
+    #   _show_reconfigure_form
+    # ---------------------------
+    def _show_reconfigure_form(self, config_entry, errors=None):
+        """Show the form used to edit connection settings."""
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=config_entry.data[CONF_HOST]): str,
+                    vol.Required(
+                        CONF_USERNAME, default=config_entry.data[CONF_USERNAME]
+                    ): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                    vol.Optional(CONF_PORT, default=config_entry.data[CONF_PORT]): int,
+                    vol.Optional(CONF_SSL, default=config_entry.data[CONF_SSL]): bool,
+                    vol.Optional(
+                        CONF_VERIFY_SSL,
+                        default=config_entry.data[CONF_VERIFY_SSL],
                     ): bool,
                 }
             ),

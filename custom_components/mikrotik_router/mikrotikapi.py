@@ -273,7 +273,12 @@ class MikrotikAPI:
     def error_to_strings(self, error):
         """Translate error output to error string."""
         self.error = "cannot_connect"
-        if error == "invalid user name or password (6)":
+        normalized_error = str(error).strip().casefold()
+        if normalized_error in {
+            "invalid user name or password",
+            "invalid user name or password (6)",
+            "invalid username or password",
+        }:
             self.error = "wrong_login"
 
         if "unexpected keyword argument 'login_method" in error or (

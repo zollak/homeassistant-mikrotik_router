@@ -14,6 +14,7 @@ from mac_vendor_lookup import AsyncMacLookup
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
@@ -593,7 +594,7 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                 await self.hass.async_add_executor_job(self.get_dns)
 
             if not self.api.connected():
-                raise UpdateFailed("Mikrotik Disconnected")
+                self._raise_connection_error()
 
             if self.api.connected():
                 self.last_hwinfo_update = datetime.now().replace(microsecond=0)
@@ -679,10 +680,19 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             await self.hass.async_add_executor_job(self.get_gps)
 
         if not self.api.connected():
-            raise UpdateFailed("Mikrotik Disconnected")
+            self._raise_connection_error()
 
         # async_dispatcher_send(self.hass, "update_sensors", self)
         return self.ds
+
+    # ---------------------------
+    #   _raise_connection_error
+    # ---------------------------
+    def _raise_connection_error(self) -> None:
+        """Raise an authentication or temporary connection error."""
+        if self.api.error == "wrong_login":
+            raise ConfigEntryAuthFailed("Invalid Mikrotik credentials")
+        raise UpdateFailed("Mikrotik Disconnected")
 
     # ---------------------------
     #   get_access
