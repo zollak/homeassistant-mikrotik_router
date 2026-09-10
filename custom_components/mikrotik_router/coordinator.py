@@ -1702,6 +1702,10 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                 {"name": "horizontal-dilution", "default": "unknown"},
             ],
         )
+        if self.ds["gps"]["latitude"] == "none":
+            self.ds["gps"]["latitude"] = "unavailable"
+        if self.ds["gps"]["longitude"] == "none":
+            self.ds["gps"]["longitude"] = "unavailable"
 
     # ---------------------------
     #   get_script
