@@ -86,10 +86,19 @@ class MikrotikRouterOSUpdate(MikrotikEntity, UpdateEntity):
 
     async def async_install(self, version: str, backup: bool, **kwargs: Any) -> None:
         """Install an update."""
+        self.require_access("write", "policy", "reboot")
         if backup:
-            self.coordinator.execute("/system/backup", "save", None, None)
+            await self.async_run_routeros(
+                self.coordinator.execute, "/system/backup", "save", None, None
+            )
 
-        self.coordinator.execute("/system/package/update", "install", None, None)
+        await self.async_run_routeros(
+            self.coordinator.execute,
+            "/system/package/update",
+            "install",
+            None,
+            None,
+        )
 
     async def async_release_notes(self) -> str:
         """Return the release notes."""
@@ -162,8 +171,13 @@ class MikrotikRouterBoardFWUpdate(MikrotikEntity, UpdateEntity):
 
     async def async_install(self, version: str, backup: bool, **kwargs: Any) -> None:
         """Install an update."""
-        self.coordinator.execute("/system/routerboard", "upgrade", None, None)
-        self.coordinator.execute("/system", "reboot", None, None)
+        self.require_access("write", "policy", "reboot")
+        await self.async_run_routeros(
+            self.coordinator.execute, "/system/routerboard", "upgrade", None, None
+        )
+        await self.async_run_routeros(
+            self.coordinator.execute, "/system", "reboot", None, None
+        )
 
 
 async def fetch_changelog(session, version: str) -> str:

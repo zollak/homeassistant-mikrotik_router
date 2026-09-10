@@ -11,6 +11,7 @@ from .const import (
     DEFAULT_LOGIN_METHOD,
     DEFAULT_ENCODING,
 )
+from .exceptions import ApiEntryNotFound
 
 import librouteros
 
@@ -375,13 +376,7 @@ class MikrotikAPI:
             entry_found = tmp[".id"]
 
         if not entry_found:
-            _LOGGER.error(
-                "Mikrotik %s set_value parameter %s with value %s not found",
-                self._host,
-                param,
-                value,
-            )
-            return True
+            raise ApiEntryNotFound(f"{param}={value}")
 
         params = {".id": entry_found, mod_param: mod_value}
         self.lock.acquire()
@@ -421,14 +416,7 @@ class MikrotikAPI:
                 entry_found = tmp[".id"]
 
             if not entry_found:
-                _LOGGER.error(
-                    "Mikrotik %s Execute %s parameter %s with value %s not found",
-                    self._host,
-                    command,
-                    param,
-                    value,
-                )
-                return True
+                raise ApiEntryNotFound(f"{param}={value}")
 
             params = {".id": entry_found}
 
@@ -460,28 +448,29 @@ class MikrotikAPI:
             return False
 
         self.lock.acquire()
-        for tmp in response:
-            if "name" not in tmp:
-                continue
-
-            if tmp["name"] != name:
-                continue
-
-            entry_found = tmp[".id"]
-
-        if not entry_found:
-            _LOGGER.error("Mikrotik %s Script %s not found", self._host, name)
-            return True
-
         try:
+            for tmp in response:
+                if "name" not in tmp:
+                    continue
+
+                if tmp["name"] != name:
+                    continue
+
+                entry_found = tmp[".id"]
+
+            if not entry_found:
+                raise ApiEntryNotFound(f"script={name}")
+
             run = response("run", **{".id": entry_found})
             tuple(run)
+        except ApiEntryNotFound:
+            raise
         except Exception as e:
             self.disconnect("run_script", e)
-            self.lock.release()
             return False
+        finally:
+            self.lock.release()
 
-        self.lock.release()
         return True
 
     # ---------------------------

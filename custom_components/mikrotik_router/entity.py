@@ -9,6 +9,7 @@ from typing import Any, Callable, TypeVar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import (
     entity_platform as ep,
     entity_registry as er,
@@ -31,6 +32,7 @@ from .const import (
     DEFAULT_SENSOR_NETWATCH_TRACKER,
 )
 from .coordinator import MikrotikCoordinator, MikrotikTrackerCoordinator
+from .exceptions import ApiEntryNotFound
 from .helper import format_attribute
 
 _LOGGER = getLogger(__name__)
@@ -183,6 +185,42 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
             self._data = coordinator.data[self.entity_description.data_path][self._uid]
 
         self._attr_name = self.custom_name
+
+    async def async_run_routeros(self, target: Callable[..., bool], *args) -> None:
+        """Run a synchronous RouterOS command outside the event loop."""
+        try:
+            result = await self.hass.async_add_executor_job(target, *args)
+        except ApiEntryNotFound as error:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="entry_not_found",
+                translation_placeholders={"entry": str(error)},
+            ) from error
+        except Exception as error:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="routeros_command_failed",
+            ) from error
+
+        if not result:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="routeros_command_failed",
+            )
+
+    def require_access(self, *permissions: str) -> None:
+        """Raise when the configured RouterOS user lacks required access."""
+        missing = [
+            permission
+            for permission in permissions
+            if permission not in self.coordinator.data["access"]
+        ]
+        if missing:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="missing_permissions",
+                translation_placeholders={"permissions": ", ".join(missing)},
+            )
 
     @callback
     def _handle_coordinator_update(self) -> None:
