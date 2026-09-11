@@ -10,7 +10,6 @@ from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST, CONF_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry
-from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -105,11 +104,6 @@ async def async_add_entities(
     coordinator=None,
 ):
     """Add entities."""
-    if services:
-        platform = ep.async_get_current_platform()
-        for service in services:
-            platform.async_register_entity_service(service[0], service[1], service[2])
-
     if coordinator is None:
         coordinator = config_entry.runtime_data.data_coordinator
 

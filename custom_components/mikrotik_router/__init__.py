@@ -9,8 +9,9 @@ from homeassistant.components import zone
 from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER_DOMAIN
 from homeassistant.components.device_tracker.const import CONF_ASSOCIATED_ZONE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, service
 from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.const import (
     CONF_HOST,
     CONF_NAME,
@@ -19,6 +20,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
     CONF_ZONE,
     STATE_HOME,
+    Platform,
 )
 from homeassistant.util import slugify
 
@@ -30,12 +32,51 @@ from .coordinator import (
     MikrotikTrackerCoordinator,
 )
 from .helper import router_unique_id
+from .binary_sensor_types import SENSOR_SERVICES as BINARY_SENSOR_SERVICES
+from .button_types import SENSOR_SERVICES as BUTTON_SERVICES
+from .device_tracker_types import SENSOR_SERVICES as DEVICE_TRACKER_SERVICES
+from .sensor_types import SENSOR_SERVICES as SENSOR_PLATFORM_SERVICES
+from .switch_types import SENSOR_SERVICES as SWITCH_SERVICES
+from .update_types import SENSOR_SERVICES as UPDATE_SERVICES
 
 SCRIPT_SCHEMA = vol.Schema(
     {vol.Required("router"): cv.string, vol.Required("script"): cv.string}
 )
 
+ENTITY_SERVICES = {
+    Platform.BINARY_SENSOR: BINARY_SENSOR_SERVICES,
+    Platform.BUTTON: BUTTON_SERVICES,
+    Platform.DEVICE_TRACKER: DEVICE_TRACKER_SERVICES,
+    Platform.SENSOR: SENSOR_PLATFORM_SERVICES,
+    Platform.SWITCH: SWITCH_SERVICES,
+    Platform.UPDATE: UPDATE_SERVICES,
+}
+
 _LOGGER = logging.getLogger(__name__)
+
+
+# ---------------------------
+#   async_setup
+# ---------------------------
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Set up the Mikrotik Router integration."""
+    registered_services = set()
+    for entity_domain, entity_services in ENTITY_SERVICES.items():
+        for service_name, schema, func in entity_services:
+            if service_name in registered_services:
+                continue
+
+            service.async_register_platform_entity_service(
+                hass,
+                DOMAIN,
+                service_name,
+                entity_domain=entity_domain,
+                schema=schema,
+                func=func,
+            )
+            registered_services.add(service_name)
+
+    return True
 
 
 # ---------------------------
