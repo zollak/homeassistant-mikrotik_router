@@ -43,6 +43,7 @@
             "connection_timeout": "Mikrotik connection timeout.",
             "wrong_login": "Invalid user name or password.",
             "invalid_auth": "Invalid user name or password.",
+            "cannot_identify": "The router identity could not be verified. Ensure the RouterOS user can read System > License.",
             "librouteros_api_mismatch": "Incompatible librouteros API; update this integration."
         },
         "abort": {

@@ -14,6 +14,7 @@ from .const import (
 from .exceptions import ApiEntryNotFound
 
 import librouteros
+from librouteros.exceptions import TrapError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -307,7 +308,14 @@ class MikrotikAPI:
     # ---------------------------
     #   query
     # ---------------------------
-    def query(self, path, command=None, args=None, return_list=True) -> Optional(list):
+    def query(
+        self,
+        path,
+        command=None,
+        args=None,
+        return_list=True,
+        ignore_trap=False,
+    ) -> Optional(list):
         """Retrieve data from Mikrotik API."""
         """Returns generator object, unless return_list passed as True"""
         if path == "/system/health" and self.disable_health:
@@ -331,6 +339,15 @@ class MikrotikAPI:
         if response and return_list and not command:
             try:
                 response = list(response)
+            except TrapError as e:
+                if ignore_trap:
+                    _LOGGER.debug("Optional API query %s unavailable: %s", path, e)
+                    self.lock.release()
+                    return None
+
+                self.disconnect(f"building list for path {path}", e)
+                self.lock.release()
+                return None
             except Exception as e:
                 if path == "/system/health" and "no such command prefix" in str(e):
                     self.disable_health = True
@@ -345,6 +362,15 @@ class MikrotikAPI:
             _LOGGER.debug("API query: %s, %s, %s", path, command, args)
             try:
                 response = list(response(command, **args))
+            except TrapError as e:
+                if ignore_trap:
+                    _LOGGER.debug("Optional API query %s unavailable: %s", path, e)
+                    self.lock.release()
+                    return None
+
+                self.disconnect("path", e)
+                self.lock.release()
+                return None
             except Exception as e:
                 self.disconnect("path", e)
                 self.lock.release()

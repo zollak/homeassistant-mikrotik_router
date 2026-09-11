@@ -90,10 +90,34 @@ def validate_input(user_input):
 
     board_name = ""
     if resource:
-        board_name = str(resource[0].get("board-name", "")).casefold()
+        board_name = str(resource[0].get("board-name", "")).strip().casefold()
 
     serial_number = None
-    if not board_name.startswith(("x86", "chr")):
+    software_id = None
+    system_id = None
+    if board_name.startswith("chr"):
+        license_data = api.query(
+            "/system/license",
+            command="print",
+            args={".proplist": "system-id"},
+            ignore_trap=True,
+        )
+        if not api.connected():
+            return None, api.error or "cannot_connect"
+        if license_data:
+            system_id = license_data[0].get("system-id")
+    elif board_name.startswith("x86"):
+        license_data = api.query(
+            "/system/license",
+            command="print",
+            args={".proplist": "software-id"},
+            ignore_trap=True,
+        )
+        if not api.connected():
+            return None, api.error or "cannot_connect"
+        if license_data:
+            software_id = license_data[0].get("software-id")
+    else:
         routerboard = api.query("/system/routerboard")
         if not api.connected():
             return None, api.error or "cannot_connect"
@@ -105,7 +129,9 @@ def validate_input(user_input):
             user_input[CONF_HOST],
             user_input[CONF_PORT],
             user_input[CONF_SSL],
-            serial_number,
+            serial_number=serial_number,
+            software_id=software_id,
+            system_id=system_id,
         ),
         None,
     )
@@ -129,7 +155,7 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
     """MikrotikControllerConfigFlow class"""
 
     VERSION = 3
-    MINOR_VERSION = 1
+    MINOR_VERSION = 2
     CONNECTION_CLASS = CONN_CLASS_LOCAL_POLL
 
     def __init__(self):
@@ -200,8 +226,15 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             if error:
                 errors["base"] = error
             else:
-                await self._async_validate_entry_identity(config_entry, unique_id)
-                return self._update_entry_and_abort(config_entry, user_input, unique_id)
+                identity_error = await self._async_validate_entry_identity(
+                    config_entry, unique_id
+                )
+                if identity_error:
+                    errors["base"] = identity_error
+                else:
+                    return self._update_entry_and_abort(
+                        config_entry, user_input, unique_id
+                    )
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -234,10 +267,15 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
             if error:
                 errors["base"] = error
             else:
-                await self._async_validate_entry_identity(config_entry, unique_id)
-                return self._update_entry_and_abort(
-                    config_entry, data_updates, unique_id
+                identity_error = await self._async_validate_entry_identity(
+                    config_entry, unique_id
                 )
+                if identity_error:
+                    errors["base"] = identity_error
+                else:
+                    return self._update_entry_and_abort(
+                        config_entry, data_updates, unique_id
+                    )
 
         return self._show_reconfigure_form(config_entry, errors)
 
@@ -247,9 +285,12 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
         if config_entry.unique_id and not config_entry.unique_id.startswith(
             "endpoint:"
         ):
+            if unique_id.startswith("endpoint:"):
+                return "cannot_identify"
             self._abort_if_unique_id_mismatch(reason="wrong_router")
         elif config_entry.unique_id != unique_id:
             self._abort_if_unique_id_configured()
+        return None
 
     def _update_entry_and_abort(self, config_entry, data_updates, unique_id):
         """Update an entry and ensure the changed configuration is loaded."""

@@ -270,6 +270,9 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: MikrotikConfigE
         new_version = 3
         new_minor_version = 1
 
+    if new_version == 3 and new_minor_version < 2:
+        new_minor_version = 2
+
     if (
         new_data != config_entry.data
         or new_options != config_entry.options
