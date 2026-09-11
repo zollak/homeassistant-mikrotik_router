@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import ssl
 from time import time
-from threading import Lock
+from threading import RLock
 from voluptuous import Optional
 from .const import (
     DEFAULT_LOGIN_METHOD,
@@ -45,7 +45,8 @@ class MikrotikAPI:
         self._login_method = login_method
         self._encoding = encoding
         self._ssl_wrapper = None
-        self.lock = Lock()
+        # API operations can call query() or connect() while holding the lock.
+        self.lock = RLock()
 
         self._connection = None
         self._connected = False
@@ -357,37 +358,37 @@ class MikrotikAPI:
     # ---------------------------
     def set_value(self, path, param, value, mod_param, mod_value) -> bool:
         """Modify a parameter"""
-        entry_found = None
+        # A librouteros path is lazy, so its lookup and update must share a lock.
+        with self.lock:
+            entry_found = None
 
-        if not self.connection_check():
-            return False
+            if not self.connection_check():
+                return False
 
-        response = self.query(path, return_list=False)
-        if response is None:
-            return False
+            response = self.query(path, return_list=False)
+            if response is None:
+                return False
 
-        for tmp in response:
-            if param not in tmp:
-                continue
+            try:
+                for tmp in response:
+                    if param not in tmp:
+                        continue
 
-            if tmp[param] != value:
-                continue
+                    if tmp[param] != value:
+                        continue
 
-            entry_found = tmp[".id"]
+                    entry_found = tmp[".id"]
 
-        if not entry_found:
-            raise ApiEntryNotFound(f"{param}={value}")
+                if not entry_found:
+                    raise ApiEntryNotFound(f"{param}={value}")
 
-        params = {".id": entry_found, mod_param: mod_value}
-        self.lock.acquire()
-        try:
-            response.update(**params)
-        except Exception as e:
-            self.disconnect("set_value", e)
-            self.lock.release()
-            return False
+                response.update(**{".id": entry_found, mod_param: mod_value})
+            except ApiEntryNotFound:
+                raise
+            except Exception as e:
+                self.disconnect("set_value", e)
+                return False
 
-        self.lock.release()
         return True
 
     # ---------------------------
@@ -395,43 +396,44 @@ class MikrotikAPI:
     # ---------------------------
     def execute(self, path, command, param, value, attributes=None) -> bool:
         """Execute a command"""
-        entry_found = None
-        params = {}
+        # Keep the optional lookup and command on the same socket transaction.
+        with self.lock:
+            entry_found = None
+            params = {}
 
-        if not self.connection_check():
-            return False
+            if not self.connection_check():
+                return False
 
-        response = self.query(path, return_list=False)
-        if response is None:
-            return False
+            response = self.query(path, return_list=False)
+            if response is None:
+                return False
 
-        if param:
-            for tmp in response:
-                if param not in tmp:
-                    continue
+            try:
+                if param:
+                    for tmp in response:
+                        if param not in tmp:
+                            continue
 
-                if tmp[param] != value:
-                    continue
+                        if tmp[param] != value:
+                            continue
 
-                entry_found = tmp[".id"]
+                        entry_found = tmp[".id"]
 
-            if not entry_found:
-                raise ApiEntryNotFound(f"{param}={value}")
+                    if not entry_found:
+                        raise ApiEntryNotFound(f"{param}={value}")
 
-            params = {".id": entry_found}
+                    params = {".id": entry_found}
 
-        if attributes:
-            params.update(attributes)
+                if attributes:
+                    params.update(attributes)
 
-        self.lock.acquire()
-        try:
-            tuple(response(command, **params))
-        except Exception as e:
-            self.disconnect("execute", e)
-            self.lock.release()
-            return False
+                tuple(response(command, **params))
+            except ApiEntryNotFound:
+                raise
+            except Exception as e:
+                self.disconnect("execute", e)
+                return False
 
-        self.lock.release()
         return True
 
     # ---------------------------
