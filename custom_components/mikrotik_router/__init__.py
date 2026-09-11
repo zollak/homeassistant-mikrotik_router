@@ -73,6 +73,7 @@ def _async_setup_router_device(
 ) -> None:
     """Set up the router device before its child devices."""
     serial_number = f"{coordinator.data['routerboard']['serial-number']}"
+    protocol = "https" if config_entry.data[CONF_SSL] else "http"
     device_registry.async_get(hass).async_get_or_create(
         config_entry_id=config_entry.entry_id,
         connections={(DOMAIN, serial_number)},
@@ -81,7 +82,7 @@ def _async_setup_router_device(
         model=f"{coordinator.data['resource']['board-name']}",
         manufacturer=f"{coordinator.data['resource']['platform']}",
         sw_version=f"{coordinator.data['resource']['version']}",
-        configuration_url=f"http://{config_entry.data[CONF_HOST]}",
+        configuration_url=f"{protocol}://{config_entry.data[CONF_HOST]}",
     )
 
 

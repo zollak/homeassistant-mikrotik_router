@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from logging import getLogger
 from typing import Any, Callable, TypeVar
 
-from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST
+from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_HOST, CONF_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry
@@ -316,6 +316,9 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
                 dev_connection_value = self._data[dev_connection_value]
 
         if self.entity_description.ha_group == "System":
+            protocol = (
+                "https" if self.coordinator.config_entry.data[CONF_SSL] else "http"
+            )
             return DeviceInfo(
                 connections={(dev_connection, f"{dev_connection_value}")},
                 identifiers={(dev_connection, f"{dev_connection_value}")},
@@ -323,7 +326,7 @@ class MikrotikEntity(CoordinatorEntity[_MikrotikCoordinatorT], Entity):
                 model=f"{self.coordinator.data['resource']['board-name']}",
                 manufacturer=f"{self.coordinator.data['resource']['platform']}",
                 sw_version=f"{self.coordinator.data['resource']['version']}",
-                configuration_url=f"http://{self.coordinator.config_entry.data[CONF_HOST]}",
+                configuration_url=f"{protocol}://{self.coordinator.config_entry.data[CONF_HOST]}",
             )
 
         via_device_id = device_registry.async_get_device_id_by_identifier(
