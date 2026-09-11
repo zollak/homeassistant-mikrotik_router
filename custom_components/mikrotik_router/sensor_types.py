@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.const import (
-    PERCENTAGE,
     REVOLUTIONS_PER_MINUTE,
     UnitOfTemperature,
     UnitOfDataRate,
@@ -21,6 +20,7 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfElectricCurrent,
     UnitOfPower,
+    UnitOfRatio,
 )
 
 from .const import DOMAIN
@@ -332,23 +332,6 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         data_reference="",
     ),
     MikrotikSensorEntityDescription(
-        key="system_poe_out_consumption",
-        name="PoE out power consumption",
-        icon="mdi:transmission-tower",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        suggested_unit_of_measurement=UnitOfPower.WATT,
-        suggested_display_precision=1,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        ha_group="System",
-        data_path="health",
-        data_attribute="poe-out-consumption",
-        data_name="",
-        data_uid="",
-        data_reference="",
-    ),
-    MikrotikSensorEntityDescription(
         key="system_psu1_current",
         name="PSU 1 power consumption",
         icon="mdi:lightning-bolt-circle",
@@ -435,7 +418,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_cpu-load",
         name="CPU load",
         icon="mdi:speedometer",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,
@@ -450,7 +433,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_memory-usage",
         name="Memory usage",
         icon="mdi:memory",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,
@@ -465,7 +448,7 @@ SENSOR_TYPES: tuple[MikrotikSensorEntityDescription, ...] = (
         key="system_hdd-usage",
         name="HDD usage",
         icon="mdi:harddisk",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         device_class=None,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=None,

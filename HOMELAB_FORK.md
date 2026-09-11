@@ -58,3 +58,18 @@ conflicts. Our update-popup guard (coordinator.py + update.py) is retained. Our 
 v2.2.1 librouteros connect() hack is now **superseded** by upstream's proper login_method
 handling (plain/token -> librouteros callable) in mikrotikapi.py -- we keep upstream's
 version. Released v2.2.4.
+
+## 2026-09-11 -- synced with upstream (v2.2.6)
+Merged upstream tomaae/master (19 commits): HA 2026.8/2026.9 compatibility migrations
+(device-tracker zone model, ConfigEntry.runtime_data, device_info, entity service
+async_setup, config-entry identity modernization) + fixes (non-blocking RouterOS calls in
+the HA event loop, serialized commands for concurrent switch timeouts, device-tracker
+registry ownership, GPS none-value). Two conflicts, both non-runtime: `.github/workflows/release.yml`
+(kept OURS -- fork Actions disabled, manual zip release) and `manifest.json` (took upstream's
+content, set version 2.2.6). Runtime files (coordinator.py, update.py) auto-merged clean.
+RECONCILE: our phantom "update available (unknown)" guard is RETAINED in coordinator.py + the
+RouterOS update entity (MikrotikRouterOSUpdate is_on/latest_version), verified present post-merge;
+upstream still returns raw latest-version, so the fix is still needed. Upstream added a new second
+update entity (MikrotikRouterBoardFWUpdate, RouterBOARD firmware) with a different
+current-vs-upgrade mechanism -- NOT the same phantom bug, no patch needed. All .py AST-parse OK.
+Released v2.2.6.

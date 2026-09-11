@@ -171,7 +171,7 @@ You can find it under "Integrations", named "Mikrotik Router"
 
 Minimum requirements:
 * RouterOS v6.43/v7.1
-* Home Assistant 0.114.0
+* Home Assistant 2026.9.0
 
 ## Using Mikrotik development branch
 If you are using development branch for mikrotik, some features may stop working due to major changes in RouterOS.
@@ -205,7 +205,6 @@ First options page:
 * "Unit of measurement" - Traffic sensor measurement (bps, Kbps, Mbps, B/s, KB/s, MB/s)
 * "Show client MAC and IP on interfaces" - Display connected IP and MAC address for devices connected to ports on router
 * "Track network devices timeout" - Tracked devices will be marked as away after timeout (does not apply to Mikrotik wireless and caps-man)
-* "Zone for device tracker" - Add new tracked devices to a specified Home Assistant zone
 
 Second options page:
 

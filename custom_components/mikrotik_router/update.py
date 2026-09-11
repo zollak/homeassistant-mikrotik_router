@@ -6,7 +6,6 @@ import asyncio
 from logging import getLogger
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -17,7 +16,7 @@ from homeassistant.components.update import (
     UpdateEntityFeature,
 )
 
-from .coordinator import MikrotikCoordinator
+from .coordinator import MikrotikConfigEntry, MikrotikCoordinator
 from .entity import MikrotikEntity, async_add_entities
 from .helper import normalize_routeros_version
 from .update_types import (
@@ -35,15 +34,22 @@ DEVICE_UPDATE = "device_update"
 # ---------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    _async_add_entities: AddEntitiesCallback,
+    config_entry: MikrotikConfigEntry,
+    add_entities_callback: AddEntitiesCallback,
 ) -> None:
     """Set up entry for component"""
     dispatcher = {
         "MikrotikRouterOSUpdate": MikrotikRouterOSUpdate,
         "MikrotikRouterBoardFWUpdate": MikrotikRouterBoardFWUpdate,
     }
-    await async_add_entities(hass, config_entry, dispatcher)
+    await async_add_entities(
+        hass,
+        config_entry,
+        add_entities_callback,
+        dispatcher,
+        SENSOR_TYPES,
+        SENSOR_SERVICES,
+    )
 
 
 # ---------------------------
@@ -100,10 +106,19 @@ class MikrotikRouterOSUpdate(MikrotikEntity, UpdateEntity):
 
     async def async_install(self, version: str, backup: bool, **kwargs: Any) -> None:
         """Install an update."""
+        self.require_access("write", "policy", "reboot")
         if backup:
-            self.coordinator.execute("/system/backup", "save", None, None)
+            await self.async_run_routeros(
+                self.coordinator.execute, "/system/backup", "save", None, None
+            )
 
-        self.coordinator.execute("/system/package/update", "install", None, None)
+        await self.async_run_routeros(
+            self.coordinator.execute,
+            "/system/package/update",
+            "install",
+            None,
+            None,
+        )
 
     async def async_release_notes(self) -> str:
         """Return the release notes."""
@@ -176,8 +191,13 @@ class MikrotikRouterBoardFWUpdate(MikrotikEntity, UpdateEntity):
 
     async def async_install(self, version: str, backup: bool, **kwargs: Any) -> None:
         """Install an update."""
-        self.coordinator.execute("/system/routerboard", "upgrade", None, None)
-        self.coordinator.execute("/system", "reboot", None, None)
+        self.require_access("write", "policy", "reboot")
+        await self.async_run_routeros(
+            self.coordinator.execute, "/system/routerboard", "upgrade", None, None
+        )
+        await self.async_run_routeros(
+            self.coordinator.execute, "/system", "reboot", None, None
+        )
 
 
 async def fetch_changelog(session, version: str) -> str:

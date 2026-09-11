@@ -73,6 +73,7 @@ TO_REDACT = {
     "client-mac-address",
     "client-id",
     "active-client-id",
+    "host-name",
     "eeprom",
     "sfp-vendor-serial",
     "gateway",
@@ -91,4 +92,6 @@ TO_REDACT = {
     "caller-id",
     "target",
     "ssid",
+    "latitude",
+    "longitude",
 }

@@ -14,6 +14,7 @@ from mac_vendor_lookup import AsyncMacLookup
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
@@ -29,8 +30,6 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_SSL,
     CONF_VERIFY_SSL,
-    CONF_ZONE,
-    STATE_HOME,
 )
 
 from .const import (
@@ -105,21 +104,24 @@ class MikrotikData:
     tracker_coordinator: MikrotikTrackerCoordinator
 
 
+type MikrotikConfigEntry = ConfigEntry[MikrotikData]
+
+
 class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: MikrotikConfigEntry,
         coordinator: MikrotikCoordinator,
     ):
         """Initialize MikrotikTrackerCoordinator."""
         self.hass = hass
-        self.config_entry: ConfigEntry = config_entry
         self.coordinator = coordinator
 
         super().__init__(
             self.hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=10),
         )
@@ -134,14 +136,6 @@ class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
             config_entry.data[CONF_SSL],
             config_entry.data[CONF_VERIFY_SSL],
         )
-
-    # ---------------------------
-    #   option_zone
-    # ---------------------------
-    @property
-    def option_zone(self):
-        """Config entry option zones."""
-        return self.config_entry.options.get(CONF_ZONE, STATE_HOME)
 
     # ---------------------------
     #   _async_update_data
@@ -216,13 +210,14 @@ class MikrotikTrackerCoordinator(DataUpdateCoordinator[None]):
 class MikrotikCoordinator(DataUpdateCoordinator[None]):
     """MikrotikCoordinator Class"""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+    def __init__(self, hass: HomeAssistant, config_entry: MikrotikConfigEntry):
         """Initialize MikrotikCoordinator."""
         self.hass = hass
-        self.config_entry: ConfigEntry = config_entry
+        self.config_entry: MikrotikConfigEntry = config_entry
         super().__init__(
             self.hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=self.option_scan_interval,
         )
@@ -593,7 +588,7 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                 await self.hass.async_add_executor_job(self.get_dns)
 
             if not self.api.connected():
-                raise UpdateFailed("Mikrotik Disconnected")
+                self._raise_connection_error()
 
             if self.api.connected():
                 self.last_hwinfo_update = datetime.now().replace(microsecond=0)
@@ -679,10 +674,19 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
             await self.hass.async_add_executor_job(self.get_gps)
 
         if not self.api.connected():
-            raise UpdateFailed("Mikrotik Disconnected")
+            self._raise_connection_error()
 
         # async_dispatcher_send(self.hass, "update_sensors", self)
         return self.ds
+
+    # ---------------------------
+    #   _raise_connection_error
+    # ---------------------------
+    def _raise_connection_error(self) -> None:
+        """Raise an authentication or temporary connection error."""
+        if self.api.error == "wrong_login":
+            raise ConfigEntryAuthFailed("Invalid Mikrotik credentials")
+        raise UpdateFailed("Mikrotik Disconnected")
 
     # ---------------------------
     #   get_access
@@ -1712,6 +1716,10 @@ class MikrotikCoordinator(DataUpdateCoordinator[None]):
                 {"name": "horizontal-dilution", "default": "unknown"},
             ],
         )
+        if self.ds["gps"]["latitude"] == "none":
+            self.ds["gps"]["latitude"] = "unavailable"
+        if self.ds["gps"]["longitude"] == "none":
+            self.ds["gps"]["longitude"] = "unavailable"
 
     # ---------------------------
     #   get_script
