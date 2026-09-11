@@ -215,6 +215,7 @@ class MikrotikControllerConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders={"name": config_entry.title},
         )
 
     async def async_step_reconfigure(self, user_input=None):
