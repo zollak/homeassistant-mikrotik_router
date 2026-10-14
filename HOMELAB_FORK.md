@@ -73,3 +73,16 @@ upstream still returns raw latest-version, so the fix is still needed. Upstream 
 update entity (MikrotikRouterBoardFWUpdate, RouterBOARD firmware) with a different
 current-vs-upgrade mechanism -- NOT the same phantom bug, no patch needed. All .py AST-parse OK.
 Released v2.2.6.
+
+## 2026-10-14 -- synced with upstream (v2.3.1)
+Merged upstream tomaae/master (11 commits to homelab, 30 to master): WDS device tracking fix
+(#225), temperature unit conversion (#230; drops suggested_unit_of_measurement on 5 temperature
+sensors and adds a one-time entity-registry migration to config entry minor_version 3), Hotspot
+detection for RouterOS 6 / 7.20+ SMIPS (#258), false RouterOS update notification fix (#240),
+SFP rate/full-duplex attributes (#309), traffic calculation accuracy (#319), wireless module
+detection (#412), configurable device-tracker scan interval (#505), Lokalise, SonarCloud removed.
+Two conflicts: coordinator.py and update.py, both in our phantom "update available (unknown)"
+guard. RECONCILE: upstream cae3c3e now fixes the same bug (available needs known installed AND
+latest version; latest_version returns None for unknown), so our homelab guard is SUPERSEDED and
+dropped: update.py is now identical to upstream, coordinator.py took upstream's block.
+Result: homelab == upstream/master except manifest.json version (2.3.1). All .py AST-parse OK.
